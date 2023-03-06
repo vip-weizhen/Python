@@ -1,3 +1,4 @@
+import time
 import requests
 from bs4 import BeautifulSoup
 
@@ -10,7 +11,7 @@ urls = [
     'https://freefq.neocities.org/free.txt'
     ]
 
-with open('E:\测试\output.txt', 'a', encoding='utf-8') as f:
+with open('node.txt', 'a', encoding='utf-8') as f:
    
     for url in urls:
         response = requests.get(url)
@@ -19,3 +20,6 @@ with open('E:\测试\output.txt', 'a', encoding='utf-8') as f:
         text_content = soup.get_text()
         f.write(text_content)
 
+
+while True:
+    time.sleep(600)
