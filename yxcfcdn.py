@@ -1,64 +1,84 @@
 import requests
+import re
 import json
+import os
+import telegram
+import asyncio
 
-# 从网页上获取IP地址
-def get_ip():
-    response = requests.get('   ')
-    ip = response.text.strip()
-    return ip
+# 获取网页上的所有IP地址
+def get_all_ips_from_website(url):
+    response = requests.get(url)
+    content = response.text
+    
+    ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+    ip_matches = re.findall(ip_pattern, content)
+    
+    return ip_matches
 
-# 添加DNS记录到Cloudflare
-def add_dns_record(ip):
-    cf_api_key = '  '
-    cf_email = '  '
-    cf_zone_id = '   '
-    cf_record_name = '   '
+# 添加或更新 Cloudflare 的 DNS 记录
+def update_dns_record(ip):
+    cf_api_token = '     '
+    cf_zone_id = '    '
+    cf_record_name = 'yxcfip'
 
-    # 检查Cloudflare是否已存在该记录
+    # 检查是否存在该 DNS 记录
     headers = {
-        'X-Auth-Email': cf_email,
-        'X-Auth-Key': cf_api_key,
+        'Authorization': f'Bearer {cf_api_token}',
         'Content-Type': 'application/json'
     }
-    response = requests.get(f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records', headers=headers)
-    records = json.loads(response.text)['result']
-    for record in records:
-        if record['name'] == cf_record_name:
-            # 如果已存在则先删除
-            response = requests.delete(f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records/{record["id"]}', headers=headers)
-            print('Deleted existing DNS record:', record['name'])
-            break
+    response = requests.get(
+        f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records',
+        headers=headers,
+        params={'name': cf_record_name}
+    )
+    data = json.loads(response.text)
 
-    # 添加新的DNS记录
-    data = {
-        'type': 'A',
-        'name': cf_record_name,
-        'content': ip,
-        'ttl': 1,
-        'proxied': False
-    }
-    response = requests.post(f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records', headers=headers, json=data)
-    print('Added DNS record:', cf_record_name)
+    if 'success' in data and data['success']:
+        if data['result']:
+            # 如果存在，则删除该 DNS 记录
+            record_id = data['result'][0]['id']
+            response = requests.delete(
+                f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records/{record_id}',
+                headers=headers
+            )
+    
+    # 添加新的 DNS 记录
+    for ip_address in ip:
+        data = {
+            'type': 'A',
+            'name': cf_record_name,
+            'content': ip_address,
+            'ttl': 1,
+            'proxied': False
+        }
+        response = requests.post(
+            f'https://api.cloudflare.com/client/v4/zones/{cf_zone_id}/dns_records',
+            headers=headers,
+            json=data
+        )
 
-# 通过电报机器人推送DNS更新记录
-def send_telegram_notification(message):
-    bot_token = '    '
+# 发送更新通知到 Telegram
+async def send_telegram_message(message):
+    bot_token = '     '
     chat_id = '    '
-    tgapi =    
 
-    url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
-    data = {
-        'chat_id': chat_id,
-        'text': message
-    }
-    response = requests.post(url, data=data)
-    print('Telegram notification sent:', message)
+    bot = telegram.Bot(token=bot_token)
+    await bot.send_message(chat_id=chat_id, text=message)
 
-# 执行主程序
+# 主函数
 def main():
-    ip = get_ip()
-    add_dns_record(ip)
-    send_telegram_notification(f'DNS record updated with IP: {ip}')
+    # 获取网页上的所有IP地址
+    website_url = 'https://ip.164746.xyz/'
+    ip_addresses = get_all_ips_from_website(website_url)
+
+    if ip_addresses:
+        # 添加或更新 Cloudflare 的 DNS 记录
+        update_dns_record(ip_addresses)
+
+        # 发送 DNS 记录的更新通知
+        asyncio.run(send_telegram_message(f'DNS记录已更新，新的IP地址为: {", ".join(ip_addresses)}'))
+    else:
+        print(f"No IP addresses found on {website_url}")
 
 if __name__ == '__main__':
     main()
